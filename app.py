@@ -7,6 +7,7 @@ from data_loader import load_all
 from analysis import combine_monthly, normalized_to_100, compare_to_previous, monthly_changes
 from report import build_report
 from descriptive_stats import summary_statistics
+from period_comparison import compare_periods
 
 st.set_page_config(page_title="MoneyScope Korea", page_icon="📈", layout="wide")
 st.title("📈 MoneyScope Korea 2.4")
@@ -241,3 +242,132 @@ st.warning(
     "환율의 변화가 금리 정책 때문에 발생했다는 뜻은 아닙니다. "
     "미국 금리, 시장 위험 선호, 무역·환율정책 등 여러 요인이 영향을 줄 수 있습니다."
 )
+
+
+# ==========================================
+# 2.5 과거 경제 국면 비교
+# ==========================================
+
+st.divider()
+st.subheader("📊 과거 경제 국면 비교")
+
+st.caption(
+    "서로 다른 두 기간의 경제지표를 비교합니다."
+)
+
+# 비교 가능한 연도 가져오기
+years = sorted(monthly["date"].dt.year.unique().tolist())
+
+col1, col2 = st.columns(2)
+
+with col1:
+    year_a = st.selectbox(
+        "비교 기간 A",
+        years,
+        index=0
+    )
+
+with col2:
+    year_b = st.selectbox(
+        "비교 기간 B",
+        years,
+        index=min(1, len(years) - 1)
+    )
+
+# 선택한 연도의 데이터 추출
+period_a, period_b = compare_periods(
+    monthly,
+    f"{year_a}-01-01",
+    f"{year_a}-12-31",
+    f"{year_b}-01-01",
+    f"{year_b}-12-31"
+)
+
+# 비교할 경제지표
+indicator = st.selectbox(
+    "비교할 경제지표",
+    ["base_rate", "inflation", "usd_krw"],
+    format_func=lambda x: {
+        "base_rate": "기준금리",
+        "inflation": "물가상승률",
+        "usd_krw": "원/달러 환율"
+    }[x]
+)
+
+# 월 정보 추가
+period_a["month"] = period_a["date"].dt.month
+period_b["month"] = period_b["date"].dt.month
+
+# 같은 월을 기준으로 데이터 합치기
+comparison = pd.merge(
+    period_a[["month", indicator]],
+    period_b[["month", indicator]],
+    on="month",
+    how="outer",
+    suffixes=("_a", "_b")
+).sort_values("month")
+
+comparison = comparison.rename(columns={
+    f"{indicator}_a": f"{year_a}년",
+    f"{indicator}_b": f"{year_b}년"
+})
+
+comparison = comparison.set_index("month")
+
+# 그래프 표시
+st.line_chart(comparison)
+
+# 비교 데이터 표
+st.subheader("기간별 비교 데이터")
+st.dataframe(comparison, use_container_width=True)
+
+st.caption(
+    "동일한 달을 기준으로 비교하며, "
+    "자료가 없는 달은 빈 값으로 표시합니다."
+)
+
+# ==========================================
+# 2.5 기간별 상세 통계 비교
+# ==========================================
+
+st.subheader("📋 기간별 상세 통계 비교")
+
+def get_period_stats(df, indicator):
+    values = df[indicator].dropna()
+
+    if values.empty:
+        return None
+
+    return {
+        "평균": values.mean(),
+        "최고": values.max(),
+        "최저": values.min(),
+        "시작값": values.iloc[0],
+        "종료값": values.iloc[-1],
+        "전체 변화량": values.iloc[-1] - values.iloc[0]
+    }
+
+
+stats_a = get_period_stats(period_a, indicator)
+stats_b = get_period_stats(period_b, indicator)
+
+if stats_a is not None and stats_b is not None:
+
+    stats_table = pd.DataFrame({
+        f"{year_a}년": stats_a,
+        f"{year_b}년": stats_b
+    })
+
+    st.dataframe(
+        stats_table.style.format("{:,.2f}"),
+        use_container_width=True
+    )
+
+    st.caption(
+        "전체 변화량은 종료값에서 시작값을 뺀 값입니다. "
+        "기준금리와 물가상승률의 차이는 %p, "
+        "환율의 차이는 원 단위입니다."
+    )
+
+else:
+    st.warning("선택한 기간의 통계 데이터가 부족합니다.")
