@@ -8,6 +8,7 @@ from analysis import combine_monthly, normalized_to_100, compare_to_previous, mo
 from report import build_report
 from descriptive_stats import summary_statistics
 from period_comparison import compare_periods
+from advanced_report import make_advanced_report
 
 st.set_page_config(page_title="MoneyScope Korea", page_icon="📈", layout="wide")
 st.title("📈 MoneyScope Korea 2.4")
@@ -371,3 +372,28 @@ if stats_a is not None and stats_b is not None:
 
 else:
     st.warning("선택한 기간의 통계 데이터가 부족합니다.")
+
+
+# ==========================================
+# 2.6 심화 경제 분석 리포트
+# ==========================================
+
+st.divider()
+st.subheader("📑 심화 경제 분석 리포트")
+
+advanced_text = make_advanced_report(
+    filtered,
+    period_a,
+    period_b,
+    year_a,
+    year_b
+)
+
+st.text(advanced_text)
+
+st.download_button(
+    "심화 분석 리포트 TXT 다운로드",
+    data=advanced_text.encode("utf-8-sig"),
+    file_name="moneyscope_advanced_report.txt",
+    mime="text/plain"
+)
