@@ -1,4 +1,4 @@
-"""MoneyScope Korea 3.0 — 실제 한국은행 경제지표 통합 대시보드."""
+"""MoneyScope Korea 3.0 — 금융 전문 다크 네이비 디자인."""
 from datetime import date
 import pandas as pd
 import streamlit as st
@@ -12,8 +12,37 @@ from advanced_report import make_advanced_report
 from event_analysis import analyze_rate_fx
 
 st.set_page_config(page_title="MoneyScope Korea", page_icon="📈", layout="wide")
-st.title("📈 MoneyScope Korea 3.0")
-st.caption("한국은행 ECOS 실제 데이터로 살펴보는 기준금리 · 물가상승률 · 원/달러 환율")
+
+# 3.0 UI 리뉴얼: 화면 표현만 변경하며 데이터 계산은 수정하지 않습니다.
+st.markdown("""
+<style>
+:root { color-scheme: dark; }
+.stApp { background: radial-gradient(circle at 85% -15%, #152b48 0%, #0a1324 38%, #070e1a 100%); color: #e6eefb; }
+[data-testid="stSidebar"] { background: #0c182b; border-right: 1px solid #233651; }
+.block-container { padding-top: 2.1rem; padding-bottom: 3rem; max-width: 1320px; }
+h1, h2, h3 { letter-spacing: -0.035em; }
+h1 { font-weight: 760; }
+h3 { color: #e8f1ff; }
+[data-testid="stMetric"] { background: linear-gradient(150deg, #142940, #101d33); border: 1px solid #29405e; padding: 18px 20px; border-radius: 16px; min-height: 118px; }
+[data-testid="stMetricLabel"] { color: #a7bdd9; }
+[data-testid="stMetricValue"] { color: #f3f8ff; letter-spacing: -0.045em; }
+[data-testid="stMetricDelta"] { color: #99b5d0; }
+[data-testid="stTabs"] [role="tablist"] { gap: 0.3rem; border-bottom: 1px solid #304563; }
+[data-testid="stTabs"] button[role="tab"] { color: #a9bfd8; font-weight: 600; padding: 0.85rem 1rem; border-radius: 9px 9px 0 0; }
+[data-testid="stTabs"] button[role="tab"][aria-selected="true"] { color: #68c7ff; background: #14263b; }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background: #43b6f5; }
+[data-testid="stDataFrame"], [data-testid="stExpander"] { border-radius: 12px; overflow: hidden; }
+[data-testid="stAlert"] { border-radius: 12px; }
+.stButton button, .stDownloadButton button { border-radius: 9px; border-color: #365271; }
+[data-testid="stHorizontalBlock"] { gap: 1rem; }
+.msk-eyebrow { color: #64c4ff; font-size: .78rem; font-weight: 700; letter-spacing: .12em; }
+.msk-tagline { color: #aec2db; font-size: 1rem; margin-top: -0.25rem; margin-bottom: 1.5rem; }
+.msk-note { color: #93accb; font-size: .84rem; }
+</style>
+""", unsafe_allow_html=True)
+st.markdown('<div class="msk-eyebrow">KOREA MACROECONOMIC INTELLIGENCE</div>', unsafe_allow_html=True)
+st.title("📈 MoneyScope Korea")
+st.markdown('<div class="msk-tagline">한국은행 ECOS 데이터 기반 · 금리 / 물가 / 환율 분석 대시보드</div>', unsafe_allow_html=True)
 
 try:
     key = st.secrets["ECOS_API_KEY"]
@@ -62,6 +91,20 @@ if len(cpi_monthly) >= 2:
     if last_two.notna().all():
         inflation_delta = last_two.iloc[-1] - last_two.iloc[-2]
 
+# 시계열별 색상은 탭 전체에서 일관되게 사용합니다.
+SERIES_COLORS = {"base_rate": "#65c7ff", "inflation": "#a899ff", "usd_krw": "#ffbc75"}
+
+def style_chart(fig, y_title=None):
+    fig.update_layout(
+        template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(8,20,36,0.35)", font=dict(color="#d6e5f6"),
+        margin=dict(l=16, r=20, t=24, b=24), height=390,
+        hovermode="x unified", legend=dict(orientation="h", y=-0.2),
+    )
+    fig.update_xaxes(showgrid=False, zeroline=False)
+    fig.update_yaxes(gridcolor="#253852", zeroline=False, title_text=y_title)
+    return fig
+
 c1, c2, c3 = st.columns(3)
 c1.metric("한국 기준금리", f"{latest_rate['base_rate']:.2f}%",
           delta=f"{rate_delta:+.2f}%p (전월 대비)" if rate_delta is not None else None,
@@ -103,7 +146,13 @@ with tab_overview:
             st.info("환율은 원 단위이므로 다른 지표와 같은 축에서는 비교가 어렵습니다. 정규화 방식을 추천해요.")
         plotted = (normalized_to_100(filtered, selected) if mode != "원래 단위"
                    else filtered[["date"] + selected])
-        st.line_chart(plotted.set_index("date"), use_container_width=True)
+        fig_trend = go.Figure()
+        for col in selected:
+            fig_trend.add_trace(go.Scatter(
+                x=plotted["date"], y=plotted[col], mode="lines",
+                name=labels[col], line=dict(color=SERIES_COLORS[col], width=2.6),
+            ))
+        st.plotly_chart(style_chart(fig_trend), use_container_width=True)
         if mode != "원래 단위":
             st.caption("정규화는 각 지표의 첫 값을 100으로 맞춘 것입니다. 이는 금리·물가의 경제적 단위가 같다는 뜻은 아닙니다.")
     else:
@@ -225,6 +274,7 @@ with tab_event:
                 showlegend=False,
                 bargap=0.5,
             )
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(8,20,36,0.35)", font_color="#d6e5f6")
             st.plotly_chart(fig, use_container_width=True)
             st.caption(
                 f"전월 관측일 {int(chosen['전월 환율 관측일수'])}일 / "
@@ -317,7 +367,16 @@ with tab_period:
     comparison = comparison.set_index("month")
 
     # 그래프 표시
-    st.line_chart(comparison)
+    fig_period = go.Figure()
+    compare_colors = ["#65c7ff", "#ffbc75"]
+    for idx, col in enumerate(comparison.columns):
+        fig_period.add_trace(go.Scatter(
+            x=comparison.index, y=comparison[col], mode="lines+markers", name=col,
+            line=dict(width=2.6, color=compare_colors[idx % 2]),
+            marker=dict(size=5), connectgaps=False,
+        ))
+    fig_period.update_xaxes(dtick=1, title_text="월")
+    st.plotly_chart(style_chart(fig_period), use_container_width=True)
 
     # 비교 데이터 표
     st.subheader("기간별 비교 데이터")
